@@ -438,3 +438,13 @@ php "%~dp0wp-cli.phar" %*
 2026-06-10 11:28:06,350 - core.review_orchestrator - INFO - Running WordPress Plugin Check (may take 1-2 minutes)...
 2026-06-10 11:28:06,351 - core.plugin_check_runner - INFO - Running Plugin Check on C:\Users\GM Team\Local Sites\dynamic-ajax-product-filters-for-woocommerce\app\public\wp-content\plugins\dynamic-ajax-product-filters-for-woocommerce-pro
 2026-06-10 11:28:06,351 - core.wp_cli_runner - INFO - Running Plugin Check on: C:\Users\GM Team\Local Sites\dynamic-ajax-product-filters-for-woocommerce\app\public\wp-content\plugins\dynamic-ajax-product-filters-for-woocommerce-pro
+2026-06-10 11:30:31,017 - core.plugin_check_runner - INFO - Plugin Check complete: 314 errors, 505 warnings
+2026-06-10 11:30:31,017 - core.review_orchestrator - INFO - Plugin Check complete: 314 errors, 505 warnings
+2026-06-10 11:30:31,018 - core.review_orchestrator - INFO - Running AGENTS.md rule-based static analysis...
+2026-06-10 11:30:31,018 - analysis.agents_rules_analyzer - INFO - Starting AGENTS.md rule-based analysis of C:\Users\GM Team\Local Sites\dynamic-ajax-product-filters-for-woocommerce\app\public\wp-content\plugins\dynamic-ajax-product-filters-for-woocommerce-pro
+2026-06-10 11:30:32,137 - analysis.agents_rules_analyzer - INFO - Rule-based analysis complete: 684 issues in 31 files
+2026-06-10 11:30:32,138 - core.review_orchestrator - INFO - Static analysis: 684 issues in 31 files
+2026-06-10 11:30:32,138 - core.review_orchestrator - INFO - Building category checklist...
+2026-06-10 11:30:34,225 - core.review_orchestrator - INFO - Generating AI summary via Ollama...
+2026-06-10 11:32:25,177 - core.review_orchestrator - INFO - Review complete!
+2026-06-10 11:33:10,485 - report_generator - INFO - HTML report generated: C:/Users/GM Team/Downloads/test.html
