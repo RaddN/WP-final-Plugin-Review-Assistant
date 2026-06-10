@@ -1,0 +1,10 @@
+{
+    "ai_provider": "Ollama",
+    "model_name": "llama3:latest",
+    "api_url": "http://localhost:11434",
+    "ai_timeout": 180,
+    "max_context_size": 4096,
+    "enable_reasoning": true,
+    "last_plugin_path": "C:\\Users\\GM Team\\Local Sites\\free-filter-plugin\\app\\public\\wp-content\\plugins\\dynamic-ajax-product-filters-for-woocommerce",
+    "last_site_path": "C:\\Users\\GM Team\\Local Sites\\free-filter-plugin\\app\\public"
+}

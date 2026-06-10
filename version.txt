@@ -1,0 +1,52 @@
+# UTF-8
+#
+# For more details about fixed file info 'ffi' see:
+# http://msdn.microsoft.com/en-us/library/ms646997.aspx!
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    # Contains as much info as Windows will allow querying about the driver.
+    mask=0x3f,
+    mask_set=0x3f,
+    # Contains a bitmask that specifies the valid bits 'flags'r
+    VersionMS=1,
+    VersionLS=0,
+    ProductVersionMS=1,
+    ProductVersionLS=0,
+    mask_set=0x3f,
+    # Contains a bitmask that specifies the Boolean attributes of the file.
+    OS=0x4,
+    # The operating system for which this file was designed.
+    # 0x4 - NT and there is no need to change it.
+    TYPE=0x1,
+    # The general type of file.
+    # 0x1 - the file is an application.
+    SUBTYPE=0x0,
+    # The function of the file.
+    # 0x0 - the function is not defined for this fileType
+    DATE=(0, 0)
+    # Creation date and time stamp.
+  ),
+  mask=0x3f,
+  [StringFileInfo(
+    [
+    StringTable(
+      u'040904B0',
+      [StringData(
+        u'CompanyName', u'Open Source'),
+      StringData(
+        u'FileDescription', u'WP Plugin Review Assistant - WordPress Plugin Review Tool'),
+      StringData(
+        u'FileVersion', u'1.0.0.0'),
+      StringData(
+        u'InternalName', u'WP Plugin Review Assistant'),
+      StringData(
+        u'LegalCopyright', u'GPL v2 or later'),
+      StringData(
+        u'OriginalFilename', u'WP-Plugin-Review-Assistant.exe'),
+      StringData(
+        u'ProductName', u'WP Plugin Review Assistant'),
+      StringData(
+        u'ProductVersion', u'1.0.0.0')])
+    ]),
+  VarFileInfo([VarData(u'Translation', [1033, 1200])])
+  ])
