@@ -149,6 +149,7 @@ class PluginMetadata:
     text_domain: str
     requires_php: str
     requires_wp: str
+    stable_tag: str = ""
     requires_plugins: List[str] = field(default_factory=list)
     woo_compatible: bool = False
     description: str = ""
@@ -163,6 +164,7 @@ class PluginMetadata:
         return {
             'name': self.name,
             'version': self.version,
+            'stable_tag': self.stable_tag,
             'text_domain': self.text_domain,
             'requires_php': self.requires_php,
             'requires_wp': self.requires_wp,
@@ -204,6 +206,14 @@ class PluginCheckResult:
     info: List[ReviewIssue] = field(default_factory=list)
     raw_output: str = ""
 
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "success": self.success,
+            "errors": len(self.errors),
+            "warnings": len(self.warnings),
+            "info": len(self.info),
+        }
+
 
 @dataclass
 class StaticAnalysisResult:
@@ -232,7 +242,14 @@ class ReviewResult:
             self.plugin_check.info +
             self.static_analysis.issues
         )
-        return sorted(all_issues, key=lambda x: (x.severity.value, x.category.value))
+        severity_order = {
+            IssueSeverity.CRITICAL: 0,
+            IssueSeverity.HIGH: 1,
+            IssueSeverity.MEDIUM: 2,
+            IssueSeverity.LOW: 3,
+            IssueSeverity.INFO: 4,
+        }
+        return sorted(all_issues, key=lambda x: (severity_order[x.severity], x.category.value))
 
     @property
     def issue_count_by_severity(self) -> Dict[str, int]:
@@ -246,6 +263,11 @@ class ReviewResult:
         return {
             'plugin': self.plugin.to_dict(),
             'site': self.site.to_dict(),
+            'plugin_check': self.plugin_check.to_dict(),
+            'static_analysis': {
+                'files_scanned': self.static_analysis.files_scanned,
+                'issues': len(self.static_analysis.issues),
+            },
             'issues': [i.to_dict() for i in self.all_issues],
             'summary': self.issue_count_by_severity,
             'timestamp': self.timestamp.isoformat(),

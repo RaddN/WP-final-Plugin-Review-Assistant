@@ -67,9 +67,13 @@ class ReviewOrchestrator:
         progress("WP-CLI verified")
         pct(10)
 
-        site_url = cli.get_site_url()
-        if site_url:
-            site.wp_url = site_url
+        site_ok, site_url = cli.verify_wordpress_site()
+        if not site_ok:
+            raise RuntimeError(
+                "WP-CLI is installed, but the selected WordPress site could not be loaded: "
+                f"{site_url}"
+            )
+        site.wp_url = site_url
         site.wordpress_version = cli.get_wp_version() or ""
         site.php_version = cli.get_php_version() or ""
         site.is_valid = True
@@ -85,7 +89,7 @@ class ReviewOrchestrator:
         pct(25)
 
         progress("Running WordPress Plugin Check (may take 1-2 minutes)...")
-        pc_success, plugin_check = checker.run(plugin.root_path)
+        pc_success, plugin_check = checker.run(plugin.root_path, ensure_ready=False)
         pct(55)
         if pc_success:
             progress(
@@ -93,7 +97,7 @@ class ReviewOrchestrator:
                 f"{len(plugin_check.warnings)} warnings"
             )
         else:
-            progress(f"Plugin Check warning: {plugin_check.raw_output}")
+            raise RuntimeError(f"Plugin Check failed: {plugin_check.raw_output}")
 
         progress("Running AGENTS.md rule-based static analysis...")
         analyzer = AgentsRulesAnalyzer(plugin.root_path, plugin)

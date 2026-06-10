@@ -1,12 +1,11 @@
 """WP-CLI integration for WordPress site management."""
 import json
 import logging
-import os
 import shutil
 from pathlib import Path
-from typing import List, Optional, Tuple, Dict
+from typing import Any, Dict, List, Optional, Tuple
 
-from utils import detect_php_binary, run_command, normalize_path
+from utils import detect_localwp_runtime, detect_php_binary, normalize_path, run_command
 
 
 logger = logging.getLogger(__name__)
@@ -17,11 +16,21 @@ class WPCLIRunner:
 
     def __init__(self, wp_root: str, php_binary: Optional[str] = None):
         self.wp_root = normalize_path(wp_root)
-        self.php_binary = php_binary or detect_php_binary(self.wp_root)
+        self.localwp_runtime = detect_localwp_runtime(self.wp_root)
+        self.php_binary = (
+            php_binary
+            or self.localwp_runtime.get("php_binary")
+            or detect_php_binary(self.wp_root)
+        )
+        self.php_ini = self.localwp_runtime.get("php_ini")
         self.wp_cli_binary = self._detect_wp_cli()
+        self.wp_phar = self._find_wp_phar()
+        self.base_command = self._build_base_command()
         logger.debug("WP root: %s", self.wp_root)
         logger.debug("PHP binary: %s", self.php_binary)
+        logger.debug("PHP config: %s", self.php_ini)
         logger.debug("WP-CLI binary: %s", self.wp_cli_binary)
+        logger.debug("WP-CLI PHAR: %s", self.wp_phar)
 
     def _detect_wp_cli(self) -> Optional[str]:
         """Detect WP-CLI executable or phar."""
@@ -33,19 +42,32 @@ class WPCLIRunner:
         for candidate in candidates:
             if candidate and Path(candidate).exists():
                 return candidate
-        return shutil.which("wp") or "wp"
+        return None
 
     def _find_wp_phar(self) -> Optional[Path]:
         """Find wp-cli.phar in common locations."""
         candidates = [
+            Path(self.wp_cli_binary).with_name("wp-cli.phar") if self.wp_cli_binary else None,
             Path.home() / "wp-cli.phar",
             Path.home() / ".wp-cli" / "wp-cli.phar",
             Path("C:/wp-cli/wp-cli.phar"),
         ]
         for path in candidates:
-            if path.exists():
+            if path and path.exists():
                 return path
         return None
+
+    def _build_base_command(self) -> List[str]:
+        """Choose one trustworthy WP-CLI invocation for this site."""
+        if self.php_binary and self.wp_phar:
+            command = [self.php_binary]
+            if self.php_ini:
+                command.extend(["-c", self.php_ini])
+            command.append(str(self.wp_phar))
+            return command
+        if self.wp_cli_binary:
+            return [self.wp_cli_binary]
+        return []
 
     def _normalize_args(self, args: List[str]) -> List[str]:
         if args and args[0] == "wp":
@@ -55,33 +77,15 @@ class WPCLIRunner:
     def run(
         self,
         args: List[str],
-        timeout: int = 30,
     ) -> Tuple[bool, str, str]:
-        """Execute a WP-CLI command with LocalWP-friendly fallbacks."""
+        """Execute a WP-CLI command using the selected site-aware runtime."""
         args = self._normalize_args(args)
-        strategies: List[List[str]] = []
+        if not self.base_command:
+            return False, "", "WP-CLI was not found. Install WP-CLI or configure a WP-CLI PHAR."
 
-        if self.wp_cli_binary:
-            strategies.append([self.wp_cli_binary] + args)
-
-        if self.php_binary:
-            wp_phar = self._find_wp_phar()
-            if wp_phar:
-                strategies.append([self.php_binary, str(wp_phar)] + args)
-            strategies.append([self.php_binary, self.wp_cli_binary or "wp"] + args)
-
-        strategies.append(["wp"] + args)
-
-        last_stdout = ""
-        last_stderr = ""
-        for cmd in strategies:
-            logger.debug("Running: %s", " ".join(cmd))
-            success, stdout, stderr = run_command(cmd, self.wp_root, timeout)
-            last_stdout, last_stderr = stdout, stderr
-            if success:
-                return True, stdout, stderr
-
-        return False, last_stdout, last_stderr
+        cmd = self.base_command + args
+        logger.debug("Running: %s", " ".join(cmd))
+        return run_command(cmd, self.wp_root)
 
     def verify_wp_cli(self) -> Tuple[bool, str]:
         """Verify WP-CLI is available and working."""
@@ -89,6 +93,13 @@ class WPCLIRunner:
         if success:
             return True, stdout
         return False, f"WP-CLI error: {stderr or stdout}"
+
+    def verify_wordpress_site(self) -> Tuple[bool, str]:
+        """Verify WP-CLI can bootstrap WordPress and connect to the site database."""
+        success, stdout, stderr = self.run(["option", "get", "siteurl"])
+        if success and stdout.strip():
+            return True, stdout.strip()
+        return False, stderr or stdout or "WP-CLI could not read the site URL."
 
     def get_wp_version(self) -> Optional[str]:
         success, stdout, _ = self.run(["core", "version"])
@@ -103,12 +114,29 @@ class WPCLIRunner:
         return stdout.strip() if success else None
 
     def plugin_is_installed(self, plugin_slug: str) -> bool:
-        success, _, _ = self.run(["plugin", "is-installed", plugin_slug])
-        return success
+        state, _ = self.get_plugin_installation_state(plugin_slug)
+        return state is True
 
     def plugin_is_active(self, plugin_slug: str) -> bool:
-        success, _, _ = self.run(["plugin", "is-active", plugin_slug])
-        return success
+        state, _ = self.get_plugin_activation_state(plugin_slug)
+        return state is True
+
+    def get_plugin_installation_state(self, plugin_slug: str) -> Tuple[Optional[bool], str]:
+        """Return True/False for installed state, or None when WP-CLI failed."""
+        return self._get_plugin_state(["plugin", "is-installed", plugin_slug])
+
+    def get_plugin_activation_state(self, plugin_slug: str) -> Tuple[Optional[bool], str]:
+        """Return True/False for active state, or None when WP-CLI failed."""
+        return self._get_plugin_state(["plugin", "is-active", plugin_slug])
+
+    def _get_plugin_state(self, args: List[str]) -> Tuple[Optional[bool], str]:
+        success, stdout, stderr = self.run(args)
+        if success:
+            return True, ""
+        detail = stderr or stdout
+        if detail:
+            return None, detail
+        return False, ""
 
     def install_plugin(self, plugin_slug: str) -> Tuple[bool, str]:
         logger.info("Installing plugin: %s", plugin_slug)
@@ -128,51 +156,47 @@ class WPCLIRunner:
         success, stdout, _ = self.run(["plugin", "list", "--format=json"])
         if success:
             try:
-                return True, json.loads(stdout)
+                parsed = self._extract_json(stdout)
+                return (True, parsed) if isinstance(parsed, list) else (False, [])
             except json.JSONDecodeError:
                 return False, []
         return False, []
 
-    def run_plugin_check(self, plugin_path: str) -> Tuple[bool, dict, str]:
+    def run_plugin_check(self, plugin_path: str) -> Tuple[bool, Any, str]:
         plugin_path = str(normalize_path(plugin_path))
         logger.info("Running Plugin Check on: %s", plugin_path)
 
         success, stdout, stderr = self.run(
-            ["plugin", "check", plugin_path, "--format=json"],
-            timeout=120,
+            [
+                "plugin",
+                "check",
+                plugin_path,
+                "--format=strict-json",
+                "--fields=file,line,column,type,severity,code,message,docs",
+            ],
         )
 
-        if success and stdout.strip():
+        if success:
             try:
-                return True, json.loads(stdout), ""
+                parsed = self._extract_json(stdout)
+                if isinstance(parsed, (list, dict)):
+                    return True, parsed, ""
             except json.JSONDecodeError:
-                pass
+                if "Checks complete. No errors found." in stdout:
+                    return True, [], ""
+                return False, {}, "Plugin Check returned output that was not valid strict JSON."
 
-        # Fallback: try without --format=json and parse text output
-        success2, stdout2, stderr2 = self.run(
-            ["plugin", "check", plugin_path],
-            timeout=120,
-        )
-        if success2 or stdout2.strip():
-            return True, self._parse_text_plugin_check(stdout2), stderr2
+        return False, {}, stderr or stdout or "Plugin Check command failed without output."
 
-        return False, {}, stderr or stderr2 or stdout
-
-    def _parse_text_plugin_check(self, output: str) -> dict:
-        """Parse plain-text Plugin Check output into a dict."""
-        result = {"errors": [], "warnings": [], "info": []}
-        for line in output.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            lower = line.lower()
-            if "error" in lower or "fail" in lower:
-                result["errors"].append({"title": line, "message": line})
-            elif "warn" in lower:
-                result["warnings"].append({"title": line, "message": line})
-            else:
-                result["info"].append({"title": line, "message": line})
-        return result
+    @staticmethod
+    def _extract_json(output: str) -> Any:
+        """Extract one JSON value from otherwise clean or warning-prefixed output."""
+        decoder = json.JSONDecoder()
+        positions = [pos for pos in (output.find("["), output.find("{")) if pos >= 0]
+        if not positions:
+            raise json.JSONDecodeError("No JSON value found", output, 0)
+        value, _ = decoder.raw_decode(output[min(positions):])
+        return value
 
     def get_site_info(self) -> dict:
         info = {

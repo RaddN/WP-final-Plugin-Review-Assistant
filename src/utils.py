@@ -1,12 +1,15 @@
 """Utility functions and helpers."""
+import json
 import os
+import re
 import sys
 import logging
 import shutil
 import tempfile
 import subprocess
+import zipfile
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 
 def setup_logging(debug: bool = False) -> logging.Logger:
@@ -99,21 +102,11 @@ def cleanup_temp_directory(path: Path) -> bool:
 
 def detect_php_binary(wp_root: Path) -> Optional[str]:
     """Try to detect PHP binary from LocalWP or system."""
-    # Try LocalWP conventions first
     wp_root = normalize_path(str(wp_root))
 
-    # Check LocalWP PHP locations
-    localwp_php_paths = [
-        wp_root.parent.parent / "conf" / "php" / "php-*/bin/php",
-        wp_root.parent.parent / "conf" / "php" / "*/bin/php",
-    ]
-
-    for pattern_path in localwp_php_paths:
-        matching_paths = list(pattern_path.parent.glob("php*/bin/php"))
-        if matching_paths:
-            php_binary = str(matching_paths[0])
-            logger.debug(f"Found LocalWP PHP: {php_binary}")
-            return php_binary
+    runtime = detect_localwp_runtime(wp_root)
+    if runtime.get("php_binary"):
+        return str(runtime["php_binary"])
 
     # Try system PHP
     php_paths = [
@@ -131,8 +124,74 @@ def detect_php_binary(wp_root: Path) -> Optional[str]:
     return None
 
 
-def clean_batch_output(text: str) -> str:
-    """Clean Windows batch script wrappers like @echo off from output."""
+def detect_localwp_runtime(wp_root: Path) -> Dict[str, Any]:
+    """Resolve the LocalWP site ID, PHP binary, php.ini, and MySQL port."""
+    wp_root = normalize_path(str(wp_root))
+    appdata = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+    local_data = appdata / "Local"
+    sites_file = local_data / "sites.json"
+    if not sites_file.is_file():
+        return {}
+
+    try:
+        with open(sites_file, "r", encoding="utf-8") as handle:
+            sites = json.load(handle)
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.debug("Could not read LocalWP sites.json: %s", exc)
+        return {}
+
+    site_root = wp_root
+    if wp_root.name.lower() == "public" and wp_root.parent.name.lower() == "app":
+        site_root = wp_root.parent.parent
+
+    for site in sites.values():
+        configured_path = site.get("path")
+        if not configured_path:
+            continue
+        try:
+            configured_root = normalize_path(str(configured_path))
+        except OSError:
+            continue
+        if os.path.normcase(str(configured_root)) != os.path.normcase(str(site_root)):
+            continue
+
+        site_id = str(site.get("id", ""))
+        services = site.get("services", {})
+        php_service = services.get("php", {})
+        mysql_service = services.get("mysql", {})
+        php_version = str(php_service.get("version", ""))
+        mysql_ports = mysql_service.get("ports", {}).get("MYSQL", [])
+        mysql_port = mysql_ports[0] if mysql_ports else None
+
+        php_binary = None
+        service_root = local_data / "lightning-services"
+        if php_version and service_root.is_dir():
+            service_dirs = sorted(service_root.glob(f"php-{php_version}+*"), reverse=True)
+            for service_dir in service_dirs:
+                for relative in [
+                    Path("bin") / "win64" / "php.exe",
+                    Path("bin") / "win32" / "php.exe",
+                ]:
+                    candidate = service_dir / relative
+                    if candidate.is_file():
+                        php_binary = candidate
+                        break
+                if php_binary:
+                    break
+
+        php_ini = local_data / "run" / site_id / "conf" / "php" / "php.ini"
+        return {
+            "site_id": site_id,
+            "php_binary": str(php_binary) if php_binary else None,
+            "php_ini": str(php_ini) if php_ini.is_file() else None,
+            "mysql_port": mysql_port,
+        }
+
+    return {}
+
+
+def clean_command_output(text: str) -> str:
+    """Remove command-wrapper noise that can corrupt machine-readable output."""
     if not text:
         return text
     lines = text.splitlines()
@@ -141,16 +200,16 @@ def clean_batch_output(text: str) -> str:
         stripped = line.strip()
         if stripped.lower() == "@echo off":
             continue
-        if "wp-cli.phar" in stripped:
+        if re.match(r"^(?:PHP )?Warning: PHP Startup:.* in Unknown on line 0$", stripped):
+            logger.debug("Ignoring non-fatal PHP startup warning: %s", stripped)
             continue
         cleaned.append(line)
-    return "\n".join(cleaned)
+    return "\n".join(cleaned).strip()
 
 
 def run_command(
     cmd: list,
     cwd: Optional[Path] = None,
-    timeout: int = 30,
 ) -> Tuple[bool, str, str]:
     """Run a shell command and return (success, stdout, stderr)."""
     try:
@@ -159,21 +218,16 @@ def run_command(
             cwd=cwd,
             capture_output=True,
             text=True,
-            timeout=timeout,
         )
-        stdout = clean_batch_output(result.stdout)
-        stderr = clean_batch_output(result.stderr)
+        stdout = clean_command_output(result.stdout)
+        stderr = clean_command_output(result.stderr)
         return result.returncode == 0, stdout, stderr
-    except subprocess.TimeoutExpired:
-        return False, "", f"Command timed out after {timeout} seconds"
     except Exception as e:
         return False, "", str(e)
 
 
 def validate_zip_file(zip_path: Path) -> Tuple[bool, str]:
     """Validate a ZIP file for safety."""
-    import zipfile
-
     if not zip_path.exists():
         return False, "ZIP file does not exist"
 
@@ -182,14 +236,69 @@ def validate_zip_file(zip_path: Path) -> Tuple[bool, str]:
 
     try:
         with zipfile.ZipFile(zip_path, 'r') as zf:
-            # Check for path traversal attempts
-            for name in zf.namelist():
-                if name.startswith('/') or '..' in name:
-                    return False, f"Unsafe path in archive: {name}"
+            if len(zf.infolist()) > 20000:
+                return False, "ZIP archive contains too many files"
+
+            total_size = 0
+            for member in zf.infolist():
+                is_valid, message = _validate_zip_member(member)
+                if not is_valid:
+                    return False, message
+                total_size += member.file_size
+                if total_size > 2 * 1024 * 1024 * 1024:
+                    return False, "ZIP archive expands beyond the 2 GB safety limit"
     except Exception as e:
         return False, f"Error reading ZIP: {e}"
 
     return True, "ZIP file is valid"
+
+
+def _validate_zip_member(member: zipfile.ZipInfo) -> Tuple[bool, str]:
+    """Validate one ZIP member path and reject links."""
+    normalized = member.filename.replace("\\", "/")
+    if "\x00" in normalized:
+        return False, f"Unsafe null byte in archive path: {member.filename}"
+
+    parts = [part for part in normalized.split("/") if part not in ("", ".")]
+    if normalized.startswith("/") or re.match(r"^[A-Za-z]:", normalized):
+        return False, f"Unsafe absolute path in archive: {member.filename}"
+    if any(part == ".." for part in parts):
+        return False, f"Unsafe path traversal in archive: {member.filename}"
+
+    unix_mode = (member.external_attr >> 16) & 0xFFFF
+    if (unix_mode & 0o170000) == 0o120000:
+        return False, f"Symbolic links are not allowed in plugin ZIPs: {member.filename}"
+
+    return True, ""
+
+
+def safe_extract_zip(zip_path: Path, destination: Path) -> None:
+    """Extract a validated ZIP without allowing writes outside destination."""
+    destination = normalize_path(str(destination))
+    with zipfile.ZipFile(zip_path, "r") as archive:
+        for member in archive.infolist():
+            is_valid, message = _validate_zip_member(member)
+            if not is_valid:
+                raise ValueError(message)
+
+            normalized = member.filename.replace("\\", "/")
+            relative = Path(*[part for part in normalized.split("/") if part not in ("", ".")])
+            if not relative.parts:
+                continue
+
+            target = (destination / relative).resolve()
+            try:
+                target.relative_to(destination)
+            except ValueError as exc:
+                raise ValueError(f"Unsafe extraction target: {member.filename}") from exc
+
+            if member.is_dir():
+                target.mkdir(parents=True, exist_ok=True)
+                continue
+
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with archive.open(member, "r") as source, open(target, "wb") as output:
+                shutil.copyfileobj(source, output)
 
 
 def is_hidden_or_dot(path: Path, root_path: Path) -> bool:
@@ -213,4 +322,3 @@ def is_hidden_or_dot(path: Path, root_path: Path) -> bool:
     except Exception:
         pass
     return False
-

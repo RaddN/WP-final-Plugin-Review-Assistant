@@ -4,18 +4,10 @@ Comprehensive plugin review checklist aligned with AGENTS.md categories.
 import json
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
 from typing import Dict, List, Any
 from pathlib import Path
 
-
-class CheckStatus(Enum):
-    """Check result status."""
-    PASSED = "passed"
-    FAILED = "failed"
-    WARNING = "warning"
-    SKIPPED = "skipped"
-    NOT_APPLICABLE = "n/a"
+from models import CheckStatus
 
 
 @dataclass

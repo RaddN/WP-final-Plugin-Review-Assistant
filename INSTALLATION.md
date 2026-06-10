@@ -90,10 +90,7 @@ The application window should open. If you see any errors, refer to the Troubles
 ## Running the Application
 
 ### Option 1: Quick Launch (Recommended)
-Double-click `run.bat` in the folder. The application will:
-- Check Python installation
-- Install dependencies if needed
-- Launch the application
+Double-click `run.bat` in the folder after installing dependencies. It launches the application with the configured `python` command.
 
 ### Option 2: PowerShell
 ```powershell
@@ -232,16 +229,9 @@ PHP_BINARY=C:\path\to\php.exe
 WP_CLI_PHP=C:\path\to\php.exe
 ```
 
-### Increasing Analysis Timeout
-
-Edit `src/core/wp_cli_runner.py`, find `timeout=30` and increase value (in seconds):
-```python
-success, stdout, stderr = run_command(cmd, self.wp_root, timeout=60)  # 60 seconds
-```
-
 ### Custom Analysis Rules
 
-Edit `src/analysis/static_analyzer.py` to add custom patterns:
+Edit `src/analysis/agents_rules_analyzer.py` to add custom patterns:
 ```python
 CUSTOM_PATTERNS = {
     'my_pattern': {
@@ -257,7 +247,7 @@ CUSTOM_PATTERNS = {
 1. **First Run**: Load a test plugin to familiarize with the interface
 2. **Documentation**: Read README.md for detailed feature documentation
 3. **Reporting**: Generate HTML report for sharing with team
-4. **Integration**: Copy Codex prompt to Claude Code for automated fixes
+4. **Integration**: Copy the generated Codex prompt for automated fixes
 5. **Build**: Create standalone executable for distribution if needed
 
 ## Getting Help

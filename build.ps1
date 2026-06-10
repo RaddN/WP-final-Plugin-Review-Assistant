@@ -49,11 +49,17 @@ Write-Host ""
 $pyinstallerArgs = @(
     "--onefile"
     "--name=WP-Plugin-Review-Assistant"
-    "--icon=icon.ico"
     "--version-file=version.txt"
+    "--paths=src"
     "--add-data=src:src"
     "main.py"
 )
+
+if (Test-Path ".\icon.ico") {
+    $pyinstallerArgs += "--icon=icon.ico"
+} else {
+    Write-Host "icon.ico not found; building with the default application icon." -ForegroundColor Yellow
+}
 
 if ($NoConsole) {
     $pyinstallerArgs += "--windowed"
@@ -70,7 +76,7 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "Executable location: .\dist\WP-Plugin-Review-Assistant.exe"
     Write-Host ""
     Write-Host "You can now run the application by executing the .exe file directly."
-    Write-Host "No additional installation required!"
+    Write-Host "Python is bundled; LocalWP and WP-CLI are still required for site reviews."
 } else {
     Write-Host ""
     Write-Host "=========================================="

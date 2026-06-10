@@ -60,7 +60,7 @@ python main.py
 ✅ **Generates Professional Reports**
 - Beautiful HTML with styling
 - Machine-readable JSON
-- Codex prompts for Claude Code fixes
+- Structured Codex prompts for fixes
 
 ---
 
@@ -144,7 +144,7 @@ WP-Plugin-Review-Assistant/
 ### Reporting
 - **HTML**: Professional, styled, shareable
 - **JSON**: Machine-readable export
-- **Codex Prompt**: Ready for Claude Code
+- **Codex Prompt**: Ready for Codex-assisted fixes
 
 ---
 
@@ -267,7 +267,7 @@ System (Windows, WP-CLI, PHP, LocalWP)
 | Performance | ✅ | Queries, autoload |
 | HTML Reports | ✅ | Professional styling |
 | JSON Export | ✅ | Tool integration |
-| Codex Prompts | ✅ | Claude Code ready |
+| Codex Prompts | ✅ | Codex-ready |
 | Error Handling | ✅ | Graceful failures |
 | Logging | ✅ | Full debug logs |
 

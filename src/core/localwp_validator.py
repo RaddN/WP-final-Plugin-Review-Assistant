@@ -67,6 +67,7 @@ class LocalWPValidator:
 
     def validate_site(self, site: LocalWPSite, use_wp_cli: bool = True) -> Tuple[bool, str]:
         try:
+            site.is_valid = False
             wp_root = Path(site.path)
             is_valid, msg = is_valid_wordpress_root(wp_root)
             if not is_valid:
@@ -81,15 +82,17 @@ class LocalWPValidator:
             if use_wp_cli:
                 try:
                     cli = WPCLIRunner(str(wp_root))
-                    wp_ok, _ = cli.verify_wp_cli()
-                    if wp_ok:
-                        live_url = cli.get_site_url()
-                        if live_url:
-                            site.wp_url = live_url
-                        site.wordpress_version = cli.get_wp_version() or ""
-                        site.php_version = cli.get_php_version() or ""
+                    wp_ok, wp_message = cli.verify_wp_cli()
+                    if not wp_ok:
+                        return False, wp_message
+                    site_ok, live_url = cli.verify_wordpress_site()
+                    if not site_ok:
+                        return False, f"WP-CLI cannot load this WordPress site: {live_url}"
+                    site.wp_url = live_url
+                    site.wordpress_version = cli.get_wp_version() or ""
+                    site.php_version = cli.get_php_version() or ""
                 except Exception as exc:
-                    logger.debug("WP-CLI validation skipped: %s", exc)
+                    return False, f"WP-CLI validation failed: {exc}"
 
             site.is_valid = True
             return True, "Site is valid"

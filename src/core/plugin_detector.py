@@ -1,12 +1,18 @@
 """Plugin detection and metadata extraction."""
 import re
-import zipfile
 from pathlib import Path
 from typing import Optional, Tuple
 import logging
 
 from models import PluginMetadata
-from utils import normalize_path, validate_zip_file, create_temp_directory, cleanup_temp_directory, is_hidden_or_dot
+from utils import (
+    cleanup_temp_directory,
+    create_temp_directory,
+    is_hidden_or_dot,
+    normalize_path,
+    safe_extract_zip,
+    validate_zip_file,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -81,8 +87,7 @@ class PluginDetector:
         # Extract to temp directory
         self.temp_dir = create_temp_directory()
         try:
-            with zipfile.ZipFile(self.plugin_path, 'r') as zf:
-                zf.extractall(self.temp_dir)
+            safe_extract_zip(self.plugin_path, self.temp_dir)
 
             # Find plugin root in extracted files
             plugin_root = self._find_plugin_root_in_zip()
@@ -166,13 +171,13 @@ class PluginDetector:
             if readme_file.exists():
                 readme_data = self._read_readme(readme_file)
 
-            # Merge data (readme.txt takes precedence)
-            metadata_dict = {**header_data, **readme_data}
+            metadata_dict = {**readme_data, **header_data}
 
             # Create metadata object
             metadata = PluginMetadata(
                 name=metadata_dict.get('name', 'Unknown'),
                 version=metadata_dict.get('version', '1.0.0'),
+                stable_tag=metadata_dict.get('stable_tag', ''),
                 text_domain=metadata_dict.get('text_domain', ''),
                 requires_php=metadata_dict.get('requires_php', '7.4'),
                 requires_wp=metadata_dict.get('requires_wp', '5.0'),
@@ -242,7 +247,7 @@ class PluginDetector:
             # Extract stable tag
             for line in lines:
                 if line.startswith('Stable tag:'):
-                    metadata['version'] = line.replace('Stable tag:', '').strip()
+                    metadata['stable_tag'] = line.replace('Stable tag:', '').strip()
 
             return metadata
         except Exception as e:

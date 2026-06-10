@@ -382,6 +382,7 @@ class WPPluginReviewAssistant(QMainWindow):
         self.plugin_info_text.setText(
             f"Name: {p.name}\n"
             f"Version: {p.version}\n"
+            f"Stable Tag: {p.stable_tag or '-'}\n"
             f"Text Domain: {p.text_domain or '—'}\n"
             f"Requires PHP: {p.requires_php}\n"
             f"Requires WordPress: {p.requires_wp}\n"
@@ -515,6 +516,8 @@ class WPPluginReviewAssistant(QMainWindow):
             f"Checklist: {checklist.total_checks} checks — "
             f"{checklist.total_passed} passed, {checklist.total_failed} failed, "
             f"{checklist.total_warnings} warnings<br>"
+            f"Plugin Check: {len(review.plugin_check.errors)} errors, "
+            f"{len(review.plugin_check.warnings)} warnings<br>"
             f"AI: {'Available' if self.full_result.ai_available else 'Rule-based fallback'}"
         )
 
@@ -712,6 +715,12 @@ class WPPluginReviewAssistant(QMainWindow):
             }
             QProgressBar::chunk { background: #2271b1; border-radius: 3px; }
         """)
+
+    def closeEvent(self, event):
+        """Clean up extracted ZIP files when the application closes."""
+        if self.plugin_detector:
+            self.plugin_detector.cleanup()
+        super().closeEvent(event)
 
 
 def main():

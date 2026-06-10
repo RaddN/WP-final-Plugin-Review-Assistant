@@ -18,31 +18,53 @@ class PluginCheckRunner:
     def ensure_installed(self) -> Tuple[bool, str]:
         """Ensure Plugin Check plugin is installed and activated."""
         logger.info("Ensuring Plugin Check is installed and activated...")
+        actions = []
 
-        if not self.cli.plugin_is_installed("plugin-check"):
+        installed, detail = self.cli.get_plugin_installation_state("plugin-check")
+        if installed is None:
+            return False, f"Could not determine whether Plugin Check is installed: {detail}"
+
+        if not installed:
             success, msg = self.cli.install_plugin("plugin-check")
             if not success:
                 return False, f"Failed to install Plugin Check: {msg}"
-        elif not self.cli.plugin_is_active("plugin-check"):
+            actions.append("installed and activated")
+
+            installed, detail = self.cli.get_plugin_installation_state("plugin-check")
+            if installed is not True:
+                return False, f"Plugin Check installation could not be verified: {detail}"
+
+        active, detail = self.cli.get_plugin_activation_state("plugin-check")
+        if active is None:
+            return False, f"Could not determine whether Plugin Check is active: {detail}"
+
+        if not active:
             success, msg = self.cli.activate_plugin("plugin-check")
             if not success:
                 return False, f"Failed to activate Plugin Check: {msg}"
+            actions.append("activated")
 
-        return True, "Plugin Check is ready"
+            active, detail = self.cli.get_plugin_activation_state("plugin-check")
+            if active is not True:
+                return False, f"Plugin Check activation could not be verified: {detail}"
 
-    def run(self, plugin_path: str) -> Tuple[bool, PluginCheckResult]:
+        if actions:
+            return True, f"Plugin Check was {' and '.join(actions)} and verified"
+        return True, "Plugin Check is installed, active, and verified"
+
+    def run(self, plugin_path: str, ensure_ready: bool = True) -> Tuple[bool, PluginCheckResult]:
         logger.info("Running Plugin Check on %s", plugin_path)
 
-        success, msg = self.ensure_installed()
-        if not success:
-            return False, PluginCheckResult(success=False, raw_output=msg)
+        if ensure_ready:
+            success, msg = self.ensure_installed()
+            if not success:
+                return False, PluginCheckResult(success=False, raw_output=msg)
 
         success, result, error = self.cli.run_plugin_check(plugin_path)
-        if not success and not result:
+        if not success:
             return False, PluginCheckResult(success=False, raw_output=error)
 
         check_result = self._parse_results(result)
-        check_result.raw_output = error
         logger.info(
             "Plugin Check complete: %d errors, %d warnings",
             len(check_result.errors),
@@ -84,20 +106,39 @@ class PluginCheckRunner:
 
     def _add_parsed_item(self, check_result: PluginCheckResult, item: Any):
         if isinstance(item, dict):
-            severity_name = str(item.get("severity", item.get("type", "warning"))).lower()
-            if "error" in severity_name or "fail" in severity_name:
-                severity = IssueSeverity.CRITICAL
+            type_name = str(item.get("type", "")).lower()
+            severity = self._map_severity(item.get("severity"), type_name)
+            if "error" in type_name or "fail" in type_name:
                 target = check_result.errors
-            elif "warn" in severity_name:
-                severity = IssueSeverity.HIGH
+            elif "warn" in type_name:
                 target = check_result.warnings
             else:
-                severity = IssueSeverity.INFO
                 target = check_result.info
 
             issue = self._parse_issue(item, severity)
             if issue:
                 target.append(issue)
+
+    def _map_severity(self, numeric_severity: Any, type_name: str) -> IssueSeverity:
+        """Map Plugin Check's 1-10 severity scale without conflating type and severity."""
+        try:
+            value = int(numeric_severity)
+        except (TypeError, ValueError):
+            if "error" in type_name or "fail" in type_name:
+                return IssueSeverity.HIGH
+            if "warn" in type_name:
+                return IssueSeverity.MEDIUM
+            return IssueSeverity.INFO
+
+        if value >= 9:
+            return IssueSeverity.CRITICAL
+        if value >= 7:
+            return IssueSeverity.HIGH
+        if value >= 4:
+            return IssueSeverity.MEDIUM
+        if value >= 1:
+            return IssueSeverity.LOW
+        return IssueSeverity.INFO
 
     def _parse_issue(self, issue_data: Dict, severity: IssueSeverity) -> ReviewIssue:
         title = (
@@ -117,7 +158,7 @@ class PluginCheckRunner:
         title_str = str(title)
         desc_str = str(description)
 
-        category = self._determine_category(title_str + " " + desc_str)
+        category = self._determine_category(title_str, desc_str)
         check_id = self._determine_check_id(title_str, desc_str, category)
 
         return ReviewIssue(
@@ -127,30 +168,32 @@ class PluginCheckRunner:
             description=desc_str,
             file_path=file_path,
             line_number=line_number,
-            code_snippet=issue_data.get("code") or issue_data.get("snippet"),
+            code_snippet=issue_data.get("snippet"),
+            suggestion=issue_data.get("docs"),
             check_id=check_id,
         )
 
-    def _determine_category(self, text: str) -> IssueCategory:
-        text_lower = text.lower()
+    def _determine_category(self, title: str, description: str) -> IssueCategory:
+        title_lower = title.lower()
+        text_lower = f"{title} {description}".lower()
 
+        if any(w in text_lower for w in ["textdomain", "text domain", "gettext", "i18n", "translation"]):
+            return IssueCategory.ACCESSIBILITY_I18N
         if any(w in text_lower for w in ["security", "nonce", "sanitize", "escape", "sql", "capability", "permission"]):
             return IssueCategory.WP_SECURITY
-        if any(w in text_lower for w in ["woocommerce", "woo", "hpos", "cart", "checkout"]):
+        if any(w in title_lower for w in ["ajax", "admin-ajax", "wp_ajax"]):
+            return IssueCategory.WP_AJAX
+        if any(w in title_lower for w in ["rest", "permission_callback"]):
+            return IssueCategory.WP_REST_API
+        if any(w in text_lower for w in ["woocommerce", "hpos", "cart", "checkout", "wc_order", "wc_product"]):
             return IssueCategory.WOO_COMPATIBILITY
         if any(w in text_lower for w in ["performance", "query", "autoload", "unbounded"]):
             return IssueCategory.WP_DATABASE
         if any(w in text_lower for w in ["accessibility", "a11y", "aria", "keyboard"]):
             return IssueCategory.ACCESSIBILITY_I18N
-        if any(w in text_lower for w in ["gettext", "text domain", "i18n", "translation"]):
-            return IssueCategory.ACCESSIBILITY_I18N
-        if any(w in text_lower for w in ["ajax", "admin-ajax"]):
-            return IssueCategory.WP_AJAX
-        if any(w in text_lower for w in ["rest", "register_rest_route", "permission_callback"]):
-            return IssueCategory.WP_REST_API
         if any(w in text_lower for w in ["readme", "release", "version", "zip", "cdn", "stable tag"]):
             return IssueCategory.RELEASE_READINESS
-        if any(w in text_lower for w in ["upload", "filesystem", "traversal", "file"]):
+        if any(w in text_lower for w in ["upload", "filesystem", "traversal"]):
             return IssueCategory.WP_FILESYSTEM
         if any(w in text_lower for w in ["option", "setting", "register_setting"]):
             return IssueCategory.WP_SETTINGS
@@ -162,6 +205,7 @@ class PluginCheckRunner:
         return IssueCategory.PLUGIN_CHECK
 
     def _determine_check_id(self, title: str, desc: str, category: IssueCategory) -> Optional[str]:
+        title_lower = title.lower()
         text_lower = (title + " " + desc).lower()
 
         # Direct checks mapping
@@ -179,7 +223,9 @@ class PluginCheckRunner:
             return "wp_security_sql_prepared"
         if "permission_callback" in text_lower:
             return "rest_permission_callback"
-        if "ajax" in text_lower or "wp_ajax" in text_lower:
+        if "textdomain" in text_lower or "text domain" in text_lower or "gettext" in text_lower:
+            return "i18n_text_domain"
+        if "ajax" in title_lower or "wp_ajax" in title_lower or "admin-ajax" in title_lower:
             return "ajax_security"
         if "traversal" in text_lower or "path traversal" in text_lower:
             return "fs_path_traversal"
@@ -189,8 +235,6 @@ class PluginCheckRunner:
             return "wp_security_secrets"
         if "prefix" in text_lower or "naming" in text_lower:
             return "wp_standards_prefixing"
-        if "text domain" in text_lower or "domain" in text_lower:
-            return "i18n_text_domain"
         if "readme" in text_lower or "stable tag" in text_lower:
             return "release_readme_version"
         if "cdn" in text_lower or "external" in text_lower or "google-fonts" in text_lower:

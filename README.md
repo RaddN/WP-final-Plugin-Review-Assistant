@@ -16,10 +16,10 @@ No paid AI APIs are required. The app uses **Ollama**, **LM Studio**, or a **rul
 - **Plugin selection**: folder or ZIP (safe extraction, path traversal rejection)
 - **Metadata detection**: name, version, text domain, PHP/WP requirements, WooCommerce usage
 - **LocalWP auto-detection**: `C:\Users\<user>\Local Sites\*\app\public`
-- **WP-CLI integration**: `wp --info`, site validation, plugin-check install/activate
-- **WordPress Plugin Check**: primary automated review via `wp plugin check`
+- **WP-CLI integration**: LocalWP-aware PHP/php.ini detection, site validation, plugin-check install/activate
+- **WordPress Plugin Check**: strict JSON findings from `wp plugin check`
 - **AGENTS.md static rules**: security, defensive coding, WooCommerce, release readiness
-- **12-category checklist**: pass/fail/skipped per AGENTS.md standards
+- **17-category checklist**: automated results plus explicit manual/runtime verification states
 - **Free local AI summary**: Ollama / LM Studio (optional)
 - **Reports**: HTML, JSON, Codex fix prompts
 
@@ -78,7 +78,6 @@ The application window will open. Use **Settings** to configure Ollama/LM Studio
    - Verify site information is correct
 
 3. **Run Review**
-   - Configure which checks to run (Plugin Check and/or Static Analysis)
    - Click "Start Review"
    - Monitor progress as analysis runs
    - Review output messages for any warnings
@@ -91,7 +90,7 @@ The application window will open. Use **Settings** to configure Ollama/LM Studio
 5. **Export Results**
    - **HTML Report**: Professional formatted report with styling
    - **JSON Export**: Machine-readable format for tool integration
-   - **Codex Prompt**: Copy Claude Code prompt for fixing issues
+   - **Codex Prompt**: Copy a structured prompt for fixing issues with Codex
 
 ## How It Works
 
@@ -111,14 +110,17 @@ The application window will open. Use **Settings** to configure Ollama/LM Studio
 ### WordPress Plugin Check
 - Verifies Plugin Check plugin is installed in target site
 - Automatically installs if missing
-- Runs comprehensive checks via WP-CLI
+- Verifies activation after install/activate
+- Runs comprehensive checks via WP-CLI using the selected LocalWP site's runtime
+- Waits for WP-CLI commands to finish instead of applying fixed command time limits
+- Stops with an actionable error instead of generating a clean report when WP-CLI or Plugin Check fails
 - Parses and categorizes results
 
 ### Report Generation
 - Aggregates issues from all sources
 - Organizes by severity and category
 - Generates professional HTML with styling
-- Creates Codex prompts for Claude Code integration
+- Creates structured Codex fix prompts
 
 ## Troubleshooting
 
@@ -177,7 +179,7 @@ python main.py
 
 ### Adding Custom Analysis Rules
 
-Edit `src/analysis/static_analyzer.py` to add new pattern checks:
+Edit `src/analysis/agents_rules_analyzer.py` to add new pattern checks:
 
 ```python
 NEW_PATTERNS = {
@@ -202,7 +204,6 @@ This creates `dist\WP-Plugin-Review-Assistant.exe`.
 
 ## Future Enhancements
 
-- [ ] AI-powered issue summarization (Ollama/LM Studio integration)
 - [ ] Custom analysis rule builder
 - [ ] Batch plugin review
 - [ ] CI/CD integration

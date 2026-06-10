@@ -62,6 +62,7 @@ class ReportGenerator:
 ## Plugin
 - **Name:** {self.result.plugin.name}
 - **Version:** {self.result.plugin.version}
+- **Stable Tag:** {self.result.plugin.stable_tag or 'Not declared'}
 - **Path:** {self.result.plugin.root_path}
 - **Text Domain:** {self.result.plugin.text_domain}
 - **WooCommerce:** {'Yes' if self.result.plugin.woo_compatible else 'No'}
@@ -197,6 +198,7 @@ details.category[open] summary.cat-header {{ border-bottom: 1px solid #dcdcde; }
 <h1>WordPress Plugin Review Report</h1>
 <p class="meta"><strong>{plugin.name}</strong> v{plugin.version} &mdash; {self.result.timestamp.strftime('%Y-%m-%d %H:%M')}</p>
 <p class="meta">Site: {self.result.site.name} ({self.result.site.wp_url})</p>
+<p class="meta">Plugin Check: {len(self.result.plugin_check.errors)} errors, {len(self.result.plugin_check.warnings)} warnings</p>
 
 <div class="summary">
 <div class="card"><div class="num">{len(issues)}</div>Total Issues</div>
