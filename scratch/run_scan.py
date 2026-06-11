@@ -47,8 +47,8 @@ def main():
         result = orchestrator.run(metadata, site)
         print("\nReview run completed successfully!")
         print(f"Total issues: {len(result.review.all_issues)}")
-        print(f"AI Available: {result.ai_available}")
-        print(f"AI Summary length: {len(result.review.ai_summary) if result.review.ai_summary else 0}")
+        print(f"Summary Engine: {result.summary_engine}")
+        print(f"Analysis Summary length: {len(result.review.analysis_summary) if result.review.analysis_summary else 0}")
         
         html_out = "scratch_report.html"
         print(f"\nGenerating HTML report to {html_out}...")

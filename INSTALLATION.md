@@ -69,7 +69,7 @@ pip install -r requirements.txt
 
 **Expected Output:**
 ```
-Successfully installed PySide6-6.X.X requests-2.X.X jinja2-3.X.X
+Successfully installed PySide6-6.X.X jinja2-3.X.X
 ```
 
 If you see errors:
@@ -145,7 +145,7 @@ python main.py
 
 If still failing:
 ```powershell
-pip install PySide6 requests jinja2
+pip install PySide6 jinja2
 ```
 
 ### "wp command not found" or "WP-CLI not detected"

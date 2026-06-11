@@ -1,5 +1,5 @@
 """
-Comprehensive plugin review checklist aligned with AGENTS.md categories.
+Comprehensive plugin review checklist aligned with WordPress review categories.
 """
 import json
 from dataclasses import dataclass, field
@@ -37,7 +37,7 @@ class CheckItem:
 
 @dataclass
 class ReviewChecklist:
-    """Comprehensive review checklist by AGENTS.md category."""
+    """Comprehensive review checklist by WordPress review category."""
     plugin_name: str
     site_name: str
     timestamp: str
@@ -131,7 +131,7 @@ class ReviewChecklist:
 
 
 class ChecklistBuilder:
-    """Build checklist items aligned with AGENTS.md categories."""
+    """Build checklist items aligned with WordPress review categories."""
 
     @staticmethod
     def create_plugin_check_category() -> List[CheckItem]:
@@ -169,7 +169,7 @@ class ChecklistBuilder:
 
     @staticmethod
     def create_wp_standards_category() -> List[CheckItem]:
-        """WP Plugin Standards from AGENTS.md."""
+        """WP Plugin standards."""
         return [
             CheckItem(
                 id='wp_standards_header',
@@ -245,7 +245,7 @@ class ChecklistBuilder:
 
     @staticmethod
     def create_wp_security_category() -> List[CheckItem]:
-        """WP Security Rules from AGENTS.md."""
+        """WP security rules."""
         return [
             CheckItem(
                 id='wp_security_capabilities',
@@ -321,7 +321,7 @@ class ChecklistBuilder:
 
     @staticmethod
     def create_defensive_coding_category() -> List[CheckItem]:
-        """WP Defensive Coding from AGENTS.md."""
+        """WP defensive coding."""
         return [
             CheckItem(
                 id='defensive_null_checks',
@@ -383,7 +383,7 @@ class ChecklistBuilder:
 
     @staticmethod
     def create_settings_options_category() -> List[CheckItem]:
-        """WP Settings and Options from AGENTS.md."""
+        """WP settings and options."""
         return [
             CheckItem(
                 id='settings_prefixing',
@@ -410,7 +410,7 @@ class ChecklistBuilder:
 
     @staticmethod
     def create_ajax_category() -> List[CheckItem]:
-        """WP AJAX from AGENTS.md."""
+        """WP AJAX."""
         return [
             CheckItem(
                 id='ajax_prefixing',
@@ -437,7 +437,7 @@ class ChecklistBuilder:
 
     @staticmethod
     def create_rest_api_category() -> List[CheckItem]:
-        """WP REST API from AGENTS.md."""
+        """WP REST API."""
         return [
             CheckItem(
                 id='rest_permission_callback',
@@ -464,7 +464,7 @@ class ChecklistBuilder:
 
     @staticmethod
     def create_database_category() -> List[CheckItem]:
-        """WP Database from AGENTS.md."""
+        """WP database."""
         return [
             CheckItem(
                 id='db_prepared_sql',
@@ -491,7 +491,7 @@ class ChecklistBuilder:
 
     @staticmethod
     def create_filesystem_category() -> List[CheckItem]:
-        """WP Filesystem from AGENTS.md."""
+        """WP filesystem."""
         return [
             CheckItem(
                 id='fs_api_usage',
@@ -525,7 +525,7 @@ class ChecklistBuilder:
 
     @staticmethod
     def create_woo_category() -> List[CheckItem]:
-        """WooCommerce Compatibility from AGENTS.md."""
+        """WooCommerce compatibility."""
         return [
             CheckItem(
                 id='woo_crud_usage',
@@ -559,7 +559,7 @@ class ChecklistBuilder:
 
     @staticmethod
     def create_accessibility_i18n_category() -> List[CheckItem]:
-        """Accessibility and i18n from AGENTS.md."""
+        """Accessibility and i18n."""
         return [
             CheckItem(
                 id='i18n_text_domain',
@@ -600,7 +600,7 @@ class ChecklistBuilder:
 
     @staticmethod
     def create_release_readiness_category() -> List[CheckItem]:
-        """Release Readiness from AGENTS.md."""
+        """Release readiness."""
         return [
             CheckItem(
                 id='release_no_cdn',

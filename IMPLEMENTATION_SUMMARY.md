@@ -103,7 +103,7 @@ A professional Windows desktop application for reviewing WordPress and WooCommer
 - **Framework**: PySide6 (Qt for Python) - native Windows UI
 - **Language**: Python 3.9+
 - **Dependencies**:
-  - `requests` - HTTP for optional future AI integration
+  - Deterministic local summary generation - no AI/runtime HTTP dependency
   - `jinja2` - HTML template rendering
   - `pathlib` - Cross-platform path handling
 - **Packaging**: PyInstaller (for standalone .exe creation)
@@ -258,7 +258,7 @@ pip install pyinstaller
 The architecture supports easy extension:
 
 1. **Add Analysis Rules**: Edit `src/analysis/static_analyzer.py`
-2. **Add AI Integration**: Create `src/core/ai_integration.py`
+2. **Maintain Deterministic Summaries**: Keep summary generation local and rule-based
 3. **Add Report Formats**: Extend `ReportGenerator` class
 4. **Add UI Tabs**: Add tabs in `main_window.py`
 
@@ -279,7 +279,7 @@ The architecture supports easy extension:
 
 ## Future Enhancement Opportunities
 
-- AI-powered summaries (Ollama/LM Studio integration)
+- Deterministic summaries from Plugin Check and static-analysis results
 - Batch plugin review
 - CI/CD pipeline integration
 - Plugin comparison tool

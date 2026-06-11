@@ -1,10 +1,7 @@
 {
-    "ai_provider": "Ollama",
-    "model_name": "llama3:latest",
-    "api_url": "http://localhost:11434",
-    "ai_timeout": 180,
-    "max_context_size": 4096,
-    "enable_reasoning": true,
-    "last_plugin_path": "C:\\Users\\GM Team\\Local Sites\\dynamic-ajax-product-filters-for-woocommerce\\app\\public\\wp-content\\plugins\\dynamic-ajax-product-filters-for-woocommerce-pro",
-    "last_site_path": "C:\\Users\\GM Team\\Local Sites\\dynamic-ajax-product-filters-for-woocommerce\\app\\public"
+    "run_plugin_check": true,
+    "run_static_analysis": true,
+    "show_not_applicable": true,
+    "last_plugin_path": "C:\\Users\\GM Team\\Local Sites\\free-one-page-checkout\\app\\public\\wp-content\\plugins\\one-page-quick-checkout-for-woocommerce",
+    "last_site_path": "C:\\Users\\GM Team\\Local Sites\\free-one-page-checkout\\app\\public"
 }

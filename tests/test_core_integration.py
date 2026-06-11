@@ -16,6 +16,7 @@ from core.checklist_mapper import ChecklistMapper
 from core.plugin_check_runner import PluginCheckRunner
 from core.plugin_detector import PluginDetector
 from core.wp_cli_runner import WPCLIRunner
+from analysis.agents_rules_analyzer import AgentsRulesAnalyzer
 from models import (
     CheckStatus,
     IssueCategory,
@@ -25,7 +26,7 @@ from models import (
     PluginMetadata,
     StaticAnalysisResult,
 )
-from utils import safe_extract_zip, validate_zip_file
+from utils import cleanup_temp_directory, safe_extract_zip, validate_zip_file
 
 
 class WPCLIRunnerTests(unittest.TestCase):
@@ -279,6 +280,87 @@ class SharedModelTests(unittest.TestCase):
 
         self.assertEqual(1, sum(len(check.issues) for check in summary.checks))
         self.assertEqual(1, summary.failed)
+
+
+class AgentsRulesAnalyzerTests(unittest.TestCase):
+    def make_plugin(self, body: str) -> tuple[Path, PluginMetadata]:
+        root = Path(tempfile.mkdtemp()) / "example-plugin"
+        root.mkdir()
+        (root / "example-plugin.php").write_text(
+            "<?php\n/**\n * Plugin Name: Example Plugin\n * Version: 1.0.0\n"
+            " * Text Domain: example-plugin\n */\n"
+            "if ( ! defined( 'ABSPATH' ) ) { exit; }\n"
+            + body,
+            encoding="utf-8",
+        )
+        (root / "readme.txt").write_text("Stable tag: 1.0.0\n", encoding="utf-8")
+        metadata = PluginMetadata(
+            name="Example Plugin",
+            version="1.0.0",
+            text_domain="example-plugin",
+            requires_php="7.4",
+            requires_wp="6.0",
+            stable_tag="1.0.0",
+            main_file="example-plugin.php",
+            root_path=str(root),
+        )
+        return root, metadata
+
+    def test_sanitized_request_boundary_is_not_reported(self):
+        root, metadata = self.make_plugin(
+            "\nfunction example_plugin_read() {\n"
+            "    $id = isset( $_GET['id'] ) ? absint( wp_unslash( $_GET['id'] ) ) : 0;\n"
+            "    return $id;\n"
+            "}\n"
+        )
+        self.addCleanup(lambda: cleanup_temp_directory(root.parent))
+
+        result = AgentsRulesAnalyzer(str(root), metadata).analyze()
+
+        self.assertFalse(
+            [issue for issue in result.issues if issue.check_id == "wp_security_sanitization"],
+            "Sanitized wp_unslash/absint request boundary should not be reported.",
+        )
+
+    def test_unsafe_request_boundary_is_reported(self):
+        root, metadata = self.make_plugin(
+            "\nfunction example_plugin_read() {\n"
+            "    update_option( 'example_plugin_name', $_POST['name'] );\n"
+            "}\n"
+        )
+        self.addCleanup(lambda: cleanup_temp_directory(root.parent))
+
+        result = AgentsRulesAnalyzer(str(root), metadata).analyze()
+
+        self.assertTrue(
+            [issue for issue in result.issues if issue.check_id == "wp_security_sanitization"],
+            "Raw request data saved to options should be reported.",
+        )
+
+    def test_checklist_uses_static_coverage_for_statuses(self):
+        plugin = PluginMetadata(
+            name="Example",
+            version="1.0.0",
+            text_domain="example",
+            requires_php="7.4",
+            requires_wp="6.0",
+        )
+        site = LocalWPSite(name="Local", path=str(ROOT), wp_url="http://local.test")
+        static = StaticAnalysisResult(
+            automated_checks=["wp_security_sanitization", "rest_permission_callback"],
+            applicable_checks=["wp_security_sanitization"],
+            not_applicable_checks=["rest_permission_callback"],
+        )
+
+        result = ChecklistMapper().build(plugin, site, PluginCheckResult(success=True), static)
+
+        security = result.categories[IssueCategory.WP_SECURITY]
+        sanitization = next(check for check in security.checks if check.id == "wp_security_sanitization")
+        rest = result.categories[IssueCategory.WP_REST_API]
+        rest_permission = next(check for check in rest.checks if check.id == "rest_permission_callback")
+
+        self.assertEqual(CheckStatus.PASSED, sanitization.status)
+        self.assertEqual(CheckStatus.NOT_APPLICABLE, rest_permission.status)
 
 
 if __name__ == "__main__":

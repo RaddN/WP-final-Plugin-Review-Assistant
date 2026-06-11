@@ -11,11 +11,11 @@ from models import ReviewResult, IssueSeverity, CategoryReviewResult, CheckStatu
 logger = logging.getLogger(__name__)
 
 STATUS_ICONS = {
-    CheckStatus.PASSED: "✓",
-    CheckStatus.FAILED: "✗",
-    CheckStatus.WARNING: "⚠",
-    CheckStatus.SKIPPED: "⊘",
-    CheckStatus.NOT_APPLICABLE: "—",
+    CheckStatus.PASSED: "OK",
+    CheckStatus.FAILED: "FAIL",
+    CheckStatus.WARNING: "WARN",
+    CheckStatus.SKIPPED: "MANUAL",
+    CheckStatus.NOT_APPLICABLE: "N/A",
 }
 
 
@@ -47,8 +47,8 @@ class ReportGenerator:
         data = self.result.to_dict()
         if self.checklist:
             data["checklist"] = self.checklist.to_dict()
-        if self.result.ai_summary:
-            data["ai_summary"] = self.result.ai_summary
+        if self.result.analysis_summary:
+            data["analysis_summary"] = self.result.analysis_summary
 
         with open(output_path, "w", encoding="utf-8") as handle:
             json.dump(data, handle, indent=2)
@@ -127,7 +127,7 @@ class ReportGenerator:
         prompt += """
 ## Fix Instructions
 
-Follow WordPress plugin review standards (AGENTS.md):
+Follow WordPress plugin review standards:
 
 1. **Security:** capability checks, nonce verification, sanitization, escaping, `$wpdb->prepare()`
 2. **Standards:** prefix all identifiers; enqueue assets via WP APIs; no CDN assets
@@ -189,7 +189,7 @@ details.category[open] summary.cat-header {{ border-bottom: 1px solid #dcdcde; }
 .nested-issues {{ padding: 8px 16px 16px 32px; background: #fafafa; border-top: 1px dashed #e5e5e5; }}
 .nested-issue {{ margin-top: 12px; padding-left: 8px; }}
 .code {{ background: #2c3338; color: #f0f0f1; padding: 8px; border-radius: 4px; font-family: monospace; font-size: 12px; overflow-x: auto; margin-top: 6px; }}
-.ai-summary {{ background: #f0f6fc; border: 1px solid #c5d9ed; border-radius: 6px; padding: 16px; white-space: pre-wrap; }}
+.analysis-summary {{ background: #f0f6fc; border: 1px solid #c5d9ed; border-radius: 6px; padding: 16px; white-space: pre-wrap; }}
 .footer {{ margin-top: 32px; text-align: center; color: #646970; font-size: 13px; }}
 </style>
 </head>
@@ -209,13 +209,13 @@ details.category[open] summary.cat-header {{ border-bottom: 1px solid #dcdcde; }
 </div>
 """
 
-        if self.result.ai_summary:
-            html += f'<div class="section"><h2>Executive Summary</h2><div class="ai-summary">{self._escape(self.result.ai_summary)}</div></div>'
+        if self.result.analysis_summary:
+            html += f'<div class="section"><h2>Executive Summary</h2><div class="analysis-summary">{self._escape(self.result.analysis_summary)}</div></div>'
 
         if self.checklist:
-            html += '<div class="section"><h2>AGENTS.md Category Checklist</h2>'
+            html += '<div class="section"><h2>Category Checklist</h2>'
             for cat in self.checklist.all_category_results:
-                html += f'<details class="category"><summary class="cat-header">{cat.category_name} — {cat.passed}/{cat.total} passed, {cat.failed} failed</summary><div class="cat-content">'
+                html += f'<details class="category"><summary class="cat-header">{cat.category_name} - {cat.passed}/{cat.total} passed, {cat.failed} failed</summary><div class="cat-content">'
                 for check in cat.checks:
                     css = "failed" if check.status == CheckStatus.FAILED else "passed" if check.status == CheckStatus.PASSED else ""
                     icon = STATUS_ICONS.get(check.status, "")
@@ -252,7 +252,7 @@ details.category[open] summary.cat-header {{ border-bottom: 1px solid #dcdcde; }
         for issue in issues:
             html += f"""<div class="nested-issue" style="border-left: 4px solid {self._get_severity_color(issue.severity)}; margin: 12px 0; padding: 12px; background: #fafafa; border-radius: 0 4px 4px 0;">
 <strong>[{issue.severity.value.upper()}] {self._escape(issue.title)}</strong><br>
-<span style="color:#646970; font-size:0.85em;">{self._escape(issue.category.value)} — {self._escape(issue.file_path or '')}{f':{issue.line_number}' if issue.line_number else ''}</span><br>
+<span style="color:#646970; font-size:0.85em;">{self._escape(issue.category.value)} - {self._escape(issue.file_path or '')}{f':{issue.line_number}' if issue.line_number else ''}</span><br>
 {self._escape(issue.description)}"""
             if issue.code_snippet:
                 html += f'<div class="code">{self._escape(issue.code_snippet)}</div>'

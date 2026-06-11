@@ -9,7 +9,7 @@ A professional **Windows desktop application** for reviewing WordPress and WooCo
 | **Python + PySide6** (selected) | Native subprocess support for WP-CLI/PHP, reliable filesystem scanning, smaller install than Electron, strong Windows desktop UX |
 | Electron + Node.js (not used) | Heavier runtime; subprocess/file tooling less ergonomic for LocalWP CLI workflows |
 
-No paid AI APIs are required. The app uses **Ollama**, **LM Studio**, or a **rule-based fallback**.
+No AI APIs are required. The app uses local deterministic analysis only.
 
 ## Features
 
@@ -18,9 +18,9 @@ No paid AI APIs are required. The app uses **Ollama**, **LM Studio**, or a **rul
 - **LocalWP auto-detection**: `C:\Users\<user>\Local Sites\*\app\public`
 - **WP-CLI integration**: LocalWP-aware PHP/php.ini detection, site validation, plugin-check install/activate
 - **WordPress Plugin Check**: strict JSON findings from `wp plugin check`
-- **AGENTS.md static rules**: security, defensive coding, WooCommerce, release readiness
+- **Deterministic static rules**: security, defensive coding, WooCommerce, release readiness
 - **17-category checklist**: automated results plus explicit manual/runtime verification states
-- **Free local AI summary**: Ollama / LM Studio (optional)
+- **Deterministic review summary**: local issue prioritization without AI
 - **Reports**: HTML, JSON, Codex fix prompts
 
 ## Requirements
@@ -63,7 +63,7 @@ python main.py
 
 Or double-click `run.bat`.
 
-The application window will open. Use **Settings** to configure Ollama/LM Studio (optional).
+The application window will open. Use **Settings** to control the review pipeline and checklist display.
 
 ### Workflow
 
@@ -179,7 +179,7 @@ python main.py
 
 ### Adding Custom Analysis Rules
 
-Edit `src/analysis/agents_rules_analyzer.py` to add new pattern checks:
+Edit `src/analysis/agents_rules_analyzer.py` to add or refine deterministic pattern checks:
 
 ```python
 NEW_PATTERNS = {

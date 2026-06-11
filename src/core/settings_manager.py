@@ -8,15 +8,12 @@ logger = logging.getLogger(__name__)
 
 
 class SettingsManager:
-    """Manages application settings, primarily AI and scanning options."""
+    """Manages application settings and last-used paths."""
 
     DEFAULT_SETTINGS = {
-        "ai_provider": "Ollama",  # Ollama / LM Studio / Disabled
-        "model_name": "llama3:latest",
-        "api_url": "http://localhost:11434",
-        "ai_timeout": 180,
-        "max_context_size": 4096,
-        "enable_reasoning": True,
+        "run_plugin_check": True,
+        "run_static_analysis": True,
+        "show_not_applicable": True,
         "last_plugin_path": "",
         "last_site_path": "",
     }

@@ -1,4 +1,4 @@
-"""Map review findings to AGENTS.md category checklist."""
+"""Map review findings to the WordPress review category checklist."""
 import logging
 from datetime import datetime
 from typing import Dict, List, Optional
@@ -26,18 +26,33 @@ AUTOMATED_PASS_IDS = {
     "plugin_check_standards",
     "plugin_check_performance",
     "plugin_check_other",
+}
+
+PLUGIN_CHECK_COVERED_IDS = {
+    "i18n_literal_gettext",
+    "i18n_text_domain",
+    "release_no_bundled_core",
+    "release_no_cdn",
+    "release_no_dev_artifacts",
+    "release_no_eval_settings",
+    "release_readme_version",
+    "wp_security_abspath",
+    "wp_security_escaping",
+    "wp_security_sql_prepared",
     "wp_standards_header",
     "wp_standards_no_direct_core_load",
     "wp_standards_no_heredoc_nowdoc",
     "wp_standards_no_inline_scripts",
     "wp_standards_no_inline_styles",
-    "wp_security_abspath",
-    "ajax_localization",
-    "emails_api",
-    "release_no_cdn",
-    "release_no_dev_artifacts",
-    "release_no_eval_settings",
-    "release_readme_version",
+}
+
+RELATED_CHECK_IDS = {
+    "ajax_security": ["wp_security_ajax_auth", "wp_security_nonces"],
+    "db_prepared_sql": ["wp_security_sql_prepared"],
+    "fs_path_traversal": ["wp_security_path_traversal"],
+    "rest_permission_callback": ["wp_security_rest_auth"],
+    "rest_data_leak": ["wp_security_rest_auth"],
+    "wp_security_capabilities": ["ajax_security"],
 }
 
 CATEGORY_MAP = {
@@ -77,6 +92,9 @@ class ChecklistMapper:
         all_issues = (
             plugin_check_issues + static_analysis.issues
         )
+        automated_ids = set(static_analysis.automated_checks)
+        applicable_ids = set(static_analysis.applicable_checks)
+        not_applicable_ids = set(static_analysis.not_applicable_checks)
 
         # 1. Clean up WooCommerce compatibility checks if WooCommerce is not used
         if not plugin.woo_compatible:
@@ -90,7 +108,7 @@ class ChecklistMapper:
             summary_item = self._find_plugin_check_summary(checklist, issue)
             summary_item.issues.append(issue)
 
-        # 3. Map all findings to their detailed AGENTS.md topic.
+        # 3. Map all findings to their detailed review checklist topic.
         for issue in all_issues:
             check_item = self._find_check_by_id(checklist, issue.check_id)
             if not check_item:
@@ -103,6 +121,15 @@ class ChecklistMapper:
                 and issue not in check_item.issues
             ):
                 check_item.issues.append(issue)
+
+            for related_id in RELATED_CHECK_IDS.get(issue.check_id or "", []):
+                related_item = self._find_check_by_id(checklist, related_id)
+                if (
+                    related_item
+                    and related_item.status != CheckStatus.NOT_APPLICABLE
+                    and issue not in related_item.issues
+                ):
+                    related_item.issues.append(issue)
 
         # 4. Resolve status for each check item
         all_categories_list = self._iter_categories(checklist)
@@ -130,6 +157,19 @@ class ChecklistMapper:
                     if item.id.startswith("plugin_check_") and not plugin_check.success:
                         item.status = CheckStatus.SKIPPED
                         item.message = "Plugin Check did not complete successfully"
+                    elif item.id in not_applicable_ids:
+                        item.status = CheckStatus.NOT_APPLICABLE
+                        item.message = "No applicable code surface detected"
+                    elif plugin_check.success and item.id in PLUGIN_CHECK_COVERED_IDS:
+                        item.status = CheckStatus.PASSED
+                        item.message = "Covered by WordPress Plugin Check; no issues detected"
+                    elif item.id in automated_ids:
+                        if item.id in applicable_ids:
+                            item.status = CheckStatus.PASSED
+                            item.message = "Automated static rule covered this topic; no issues detected"
+                        else:
+                            item.status = CheckStatus.NOT_APPLICABLE
+                            item.message = "No applicable code surface detected"
                     elif item.id in AUTOMATED_PASS_IDS:
                         item.status = CheckStatus.PASSED
                         item.message = "No automated issues detected"

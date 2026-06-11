@@ -114,7 +114,7 @@ You'll see 4 tabs at the top:
 
 ### Codex Prompt
 - Ready to paste into Claude Code
-- Pre-formatted for AI fix suggestions
+- Pre-formatted for Codex fix suggestions
 - Issue prioritization built-in
 
 ---

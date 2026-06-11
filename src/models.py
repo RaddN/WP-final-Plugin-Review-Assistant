@@ -24,7 +24,7 @@ class CheckStatus(Enum):
 
 
 class IssueCategory(Enum):
-    """Issue categories - aligned with AGENTS.md standards."""
+    """Issue categories aligned with WordPress review standards."""
     PLUGIN_CHECK = "plugin_check_results"
     WP_STANDARDS = "wp_standards"
     WP_SECURITY = "wp_security"
@@ -221,6 +221,9 @@ class StaticAnalysisResult:
     issues: List[ReviewIssue] = field(default_factory=list)
     files_scanned: int = 0
     analysis_time: float = 0.0
+    automated_checks: List[str] = field(default_factory=list)
+    applicable_checks: List[str] = field(default_factory=list)
+    not_applicable_checks: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -230,7 +233,7 @@ class ReviewResult:
     site: LocalWPSite
     plugin_check: PluginCheckResult
     static_analysis: StaticAnalysisResult
-    ai_summary: Optional[str] = None
+    analysis_summary: Optional[str] = None
     timestamp: datetime = field(default_factory=datetime.now)
 
     @property
@@ -267,9 +270,13 @@ class ReviewResult:
             'static_analysis': {
                 'files_scanned': self.static_analysis.files_scanned,
                 'issues': len(self.static_analysis.issues),
+                'automated_checks': sorted(self.static_analysis.automated_checks),
+                'applicable_checks': sorted(self.static_analysis.applicable_checks),
+                'not_applicable_checks': sorted(self.static_analysis.not_applicable_checks),
             },
             'issues': [i.to_dict() for i in self.all_issues],
             'summary': self.issue_count_by_severity,
+            'analysis_summary': self.analysis_summary,
             'timestamp': self.timestamp.isoformat(),
         }
 

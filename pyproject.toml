@@ -9,7 +9,6 @@ description = "Professional Windows desktop tool for WordPress plugin review usi
 requires-python = ">=3.9"
 dependencies = [
     "PySide6>=6.7.0",
-    "requests>=2.31.0",
     "jinja2>=3.1.0",
 ]
 

@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QPushButton, QLabel, QLineEdit, QComboBox, QProgressBar, QTextEdit,
     QFileDialog, QMessageBox, QStackedWidget, QGroupBox, QHeaderView,
     QTableWidget, QTableWidgetItem, QTreeWidget, QTreeWidgetItem,
-    QSplitter, QFrame,
+    QSplitter, QFrame, QGridLayout,
 )
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QFont, QTextCursor, QColor
@@ -106,7 +106,7 @@ class WPPluginReviewAssistant(QMainWindow):
         main_layout.addLayout(header)
 
         subtitle = QLabel(
-            "Review WordPress/WooCommerce plugins with Plugin Check, AGENTS.md rules, and free local AI"
+            "Review WordPress/WooCommerce plugins with Plugin Check and deterministic WordPress review rules"
         )
         subtitle.setStyleSheet("color: #555; margin-bottom: 4px;")
         main_layout.addWidget(subtitle)
@@ -218,8 +218,8 @@ class WPPluginReviewAssistant(QMainWindow):
 
         layout.addWidget(self._step_title("Step 3: Run Review"))
         layout.addWidget(self._hint(
-            "Runs Plugin Check (installs/activates if needed), AGENTS.md static rules, "
-            "and optional local AI summary."
+            "Runs Plugin Check (installs/activates if needed), deterministic static rules, "
+            "and a deterministic fix-priority summary."
         ))
 
         summary_group = QGroupBox("Configuration")
@@ -253,10 +253,41 @@ class WPPluginReviewAssistant(QMainWindow):
         layout = QVBoxLayout(w)
 
         layout.addWidget(self._step_title("Step 4: Results"))
+        self.summary_card_values = {}
+        self.summary_card_subtitles = {}
+        cards_widget = QWidget()
+        cards_layout = QGridLayout(cards_widget)
+        cards_layout.setContentsMargins(0, 0, 0, 0)
+        cards_layout.setHorizontalSpacing(10)
+        cards_layout.setVerticalSpacing(10)
+
+        metric_cards = [
+            ("issues", "Total Issues", "#1f6feb"),
+            ("critical", "Critical", "#b32d2e"),
+            ("high", "High", "#cf222e"),
+            ("medium", "Medium", "#9a6700"),
+            ("low", "Low", "#1a7f37"),
+            ("passed", "Passed", "#1a7f37"),
+            ("failed", "Failed", "#cf222e"),
+            ("warnings", "Warnings", "#9a6700"),
+            ("not_applicable", "N/A", "#6e7781"),
+            ("manual", "Manual", "#57606a"),
+            ("plugin_check_errors", "Plugin Check Errors", "#b32d2e"),
+            ("plugin_check_warnings", "Plugin Check Warnings", "#9a6700"),
+        ]
+
+        for idx, (key, title, accent) in enumerate(metric_cards):
+            card = self._create_metric_card(key, title, accent)
+            cards_layout.addWidget(card, idx // 4, idx % 4)
+        for col in range(4):
+            cards_layout.setColumnStretch(col, 1)
+        layout.addWidget(cards_widget)
+
         self.results_summary = QLabel()
         self.results_summary.setWordWrap(True)
         self.results_summary.setStyleSheet(
-            "background: #f5f8fa; padding: 14px; border-radius: 6px; border: 1px solid #dde;"
+            "background: #ffffff; padding: 10px 12px; border-radius: 6px; "
+            "border: 1px solid #d8dee4; color: #57606a;"
         )
         layout.addWidget(self.results_summary)
 
@@ -264,7 +295,7 @@ class WPPluginReviewAssistant(QMainWindow):
 
         left = QWidget()
         left_layout = QVBoxLayout(left)
-        left_layout.addWidget(QLabel("Category Checklist (AGENTS.md)"))
+        left_layout.addWidget(QLabel("Category Checklist"))
         self.category_tree = QTreeWidget()
         self.category_tree.setHeaderLabels(["Category / Check", "Status"])
         self.category_tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
@@ -274,11 +305,11 @@ class WPPluginReviewAssistant(QMainWindow):
 
         right = QWidget()
         right_layout = QVBoxLayout(right)
-        right_layout.addWidget(QLabel("Issues && AI Summary"))
-        self.ai_summary_text = QTextEdit()
-        self.ai_summary_text.setReadOnly(True)
-        self.ai_summary_text.setMinimumHeight(120)
-        right_layout.addWidget(self.ai_summary_text)
+        right_layout.addWidget(QLabel("Details && Review Summary"))
+        self.analysis_detail_text = QTextEdit()
+        self.analysis_detail_text.setReadOnly(True)
+        self.analysis_detail_text.setMinimumHeight(120)
+        right_layout.addWidget(self.analysis_detail_text)
 
         self.issues_table = QTableWidget()
         self.issues_table.setColumnCount(5)
@@ -318,6 +349,52 @@ class WPPluginReviewAssistant(QMainWindow):
         lbl.setStyleSheet("color: #666;")
         lbl.setWordWrap(True)
         return lbl
+
+    def _create_metric_card(self, key: str, title: str, accent: str) -> QFrame:
+        card = QFrame()
+        card.setStyleSheet(
+            f"""
+            QFrame {{
+                background: #ffffff;
+                border: 1px solid #d8dee4;
+                border-left: 4px solid {accent};
+                border-radius: 6px;
+            }}
+            QLabel {{
+                background: transparent;
+                border: none;
+            }}
+            """
+        )
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(12, 10, 12, 10)
+        card_layout.setSpacing(4)
+
+        title_label = QLabel(title.upper())
+        title_label.setStyleSheet("color: #57606a; font-size: 11px; font-weight: 700;")
+        card_layout.addWidget(title_label)
+
+        value_label = QLabel("0")
+        value_font = QFont()
+        value_font.setPointSize(20)
+        value_font.setBold(True)
+        value_label.setFont(value_font)
+        value_label.setStyleSheet("color: #1f2328;")
+        card_layout.addWidget(value_label)
+
+        subtitle_label = QLabel("")
+        subtitle_label.setWordWrap(True)
+        subtitle_label.setStyleSheet("color: #6e7781; font-size: 11px;")
+        card_layout.addWidget(subtitle_label)
+
+        self.summary_card_values[key] = value_label
+        self.summary_card_subtitles[key] = subtitle_label
+        return card
+
+    def _set_metric_card(self, key: str, value, subtitle: str = ""):
+        if key in self.summary_card_values:
+            self.summary_card_values[key].setText(str(value))
+            self.summary_card_subtitles[key].setText(subtitle)
 
     def _open_settings(self):
         dlg = SettingsDialog(self.settings, self)
@@ -383,7 +460,7 @@ class WPPluginReviewAssistant(QMainWindow):
             f"Name: {p.name}\n"
             f"Version: {p.version}\n"
             f"Stable Tag: {p.stable_tag or '-'}\n"
-            f"Text Domain: {p.text_domain or '—'}\n"
+            f"Text Domain: {p.text_domain or '-'}\n"
             f"Requires PHP: {p.requires_php}\n"
             f"Requires WordPress: {p.requires_wp}\n"
             f"Requires Plugins: {requires}\n"
@@ -418,10 +495,10 @@ class WPPluginReviewAssistant(QMainWindow):
         s = self.site
         self.site_info_text.setText(
             f"Site: {s.name}\n"
-            f"URL: {s.wp_url or '—'}\n"
+            f"URL: {s.wp_url or '-'}\n"
             f"Path: {s.path}\n"
-            f"WordPress: {s.wordpress_version or '—'}\n"
-            f"PHP: {s.php_version or '—'}\n"
+            f"WordPress: {s.wordpress_version or '-'}\n"
+            f"PHP: {s.php_version or '-'}\n"
             f"Valid: {'Yes' if s.is_valid else 'Not validated'}"
         )
 
@@ -464,12 +541,11 @@ class WPPluginReviewAssistant(QMainWindow):
             QMessageBox.warning(self, "Error", "Select a LocalWP site first.")
             return
 
-        ai_provider = self.settings.get("ai_provider", "Disabled")
         self.review_summary_text.setText(
             f"Plugin: {self.plugin.name} v{self.plugin.version}\n"
             f"Site: {self.site.name} ({self.site.wp_url})\n"
-            f"Checks: Plugin Check + AGENTS.md static rules\n"
-            f"AI: {ai_provider} ({'enabled' if ai_provider != 'Disabled' else 'rule-based fallback'})"
+            f"Checks: Plugin Check + deterministic static rules\n"
+            f"Summary: deterministic local analysis"
         )
 
         self.review_btn.setEnabled(False)
@@ -507,18 +583,27 @@ class WPPluginReviewAssistant(QMainWindow):
         review = self.full_result.review
         checklist = self.full_result.checklist
         counts = review.issue_count_by_severity
+        skipped = sum(cat.skipped for cat in checklist.all_category_results)
+        not_applicable = sum(cat.not_applicable for cat in checklist.all_category_results)
+
+        self._set_metric_card("issues", len(review.all_issues), "Plugin Check + static findings")
+        self._set_metric_card("critical", counts["critical"], "Release-blocking risk")
+        self._set_metric_card("high", counts["high"], "Fix before handoff")
+        self._set_metric_card("medium", counts["medium"], "Needs review")
+        self._set_metric_card("low", counts["low"], "Cleanup / polish")
+        self._set_metric_card("passed", checklist.total_passed, f"of {checklist.total_checks} checks")
+        self._set_metric_card("failed", checklist.total_failed, "Checklist topics with failures")
+        self._set_metric_card("warnings", checklist.total_warnings, "Review or confirm")
+        self._set_metric_card("not_applicable", not_applicable, "No matching code surface")
+        self._set_metric_card("manual", skipped, "Runtime/manual verification")
+        self._set_metric_card("plugin_check_errors", len(review.plugin_check.errors), "Official Plugin Check")
+        self._set_metric_card("plugin_check_warnings", len(review.plugin_check.warnings), "Official Plugin Check")
 
         self.results_summary.setText(
-            f"<b>{review.plugin.name}</b> v{review.plugin.version} — "
-            f"{len(review.all_issues)} issues "
-            f"(Critical: {counts['critical']}, High: {counts['high']}, "
-            f"Medium: {counts['medium']}, Low: {counts['low']})<br>"
-            f"Checklist: {checklist.total_checks} checks — "
-            f"{checklist.total_passed} passed, {checklist.total_failed} failed, "
-            f"{checklist.total_warnings} warnings<br>"
-            f"Plugin Check: {len(review.plugin_check.errors)} errors, "
-            f"{len(review.plugin_check.warnings)} warnings<br>"
-            f"AI: {'Available' if self.full_result.ai_available else 'Rule-based fallback'}"
+            f"<b>{review.plugin.name}</b> v{review.plugin.version} reviewed with "
+            f"{self.full_result.summary_engine}. "
+            f"Checklist coverage: {checklist.total_passed}/{checklist.total_checks} passed; "
+            f"{not_applicable} not applicable; {skipped} manual/runtime."
         )
 
         self.category_tree.clear()
@@ -531,6 +616,11 @@ class WPPluginReviewAssistant(QMainWindow):
             self.category_tree.addTopLevelItem(cat_item)
 
             for check in cat_result.checks:
+                if (
+                    check.status == CheckStatus.NOT_APPLICABLE
+                    and not self.settings.get("show_not_applicable", True)
+                ):
+                    continue
                 child = QTreeWidgetItem([check.name, check.status.value.upper()])
                 child.setData(0, Qt.UserRole, check)
                 child.setForeground(1, QColor(STATUS_COLORS.get(check.status, "#333")))
@@ -554,7 +644,7 @@ class WPPluginReviewAssistant(QMainWindow):
                     }
                     color_hex = sev_colors.get(issue.severity.value, "#333")
                     issue_child.setForeground(0, QColor(color_hex))
-                    issue_child.setToolTip(0, f"Description: {issue.description}\nCode: {issue.code_snippet or '—'}\nSuggestion: {issue.suggestion or '—'}")
+                    issue_child.setToolTip(0, f"Description: {issue.description}\nCode: {issue.code_snippet or '-'}\nSuggestion: {issue.suggestion or '-'}")
                     child.addChild(issue_child)
 
             cat_item.setExpanded(cat_result.failed > 0 or cat_result.warnings > 0)
@@ -566,10 +656,10 @@ class WPPluginReviewAssistant(QMainWindow):
             self.issues_table.setItem(row, 0, QTableWidgetItem(issue.severity.value.upper()))
             self.issues_table.setItem(row, 1, QTableWidgetItem(issue.category.value))
             self.issues_table.setItem(row, 2, QTableWidgetItem(issue.title))
-            self.issues_table.setItem(row, 3, QTableWidgetItem(issue.file_path or "—"))
-            self.issues_table.setItem(row, 4, QTableWidgetItem(str(issue.line_number or "—")))
+            self.issues_table.setItem(row, 3, QTableWidgetItem(issue.file_path or "-"))
+            self.issues_table.setItem(row, 4, QTableWidgetItem(str(issue.line_number or "-")))
 
-        self.ai_summary_text.setText(review.ai_summary or "No summary generated.")
+        self.analysis_detail_text.setText(review.analysis_summary or "No summary generated.")
 
     def _on_category_selected(self):
         items = self.category_tree.selectedItems()
@@ -591,7 +681,7 @@ class WPPluginReviewAssistant(QMainWindow):
                         lines.append(f"- [{issue.severity.value.upper()}] {issue.title}")
                         lines.append(f"  File: {issue.file_path or 'unknown'}:{issue.line_number or '-'}")
                     lines.append("")
-            self.ai_summary_text.setText("\n".join(lines))
+            self.analysis_detail_text.setText("\n".join(lines))
             
         elif isinstance(data, CategoryCheck):
             lines = [
@@ -612,7 +702,7 @@ class WPPluginReviewAssistant(QMainWindow):
                     lines.append("")
             else:
                 lines.append("No issues found for this check.")
-            self.ai_summary_text.setText("\n".join(lines))
+            self.analysis_detail_text.setText("\n".join(lines))
             
         elif isinstance(data, ReviewIssue):
             lines = [
@@ -630,7 +720,7 @@ class WPPluginReviewAssistant(QMainWindow):
             if data.suggestion:
                 lines.append("### Suggested Fix:")
                 lines.append(data.suggestion)
-            self.ai_summary_text.setText("\n".join(lines))
+            self.analysis_detail_text.setText("\n".join(lines))
 
     def _export_html(self):
         if not self.full_result:
@@ -687,33 +777,43 @@ class WPPluginReviewAssistant(QMainWindow):
 
     def _apply_styling(self):
         self.setStyleSheet("""
-            QMainWindow { background: #ffffff; }
-            QLabel { color: #1d2327; }
+            QMainWindow { background: #f6f7f9; }
+            QWidget { font-size: 13px; }
+            QLabel { color: #1f2328; }
             QPushButton {
-                background: #2271b1; color: white; border: none;
-                border-radius: 4px; padding: 8px 16px; font-weight: 600;
+                background: #1f6feb; color: white; border: 1px solid #1f6feb;
+                border-radius: 5px; padding: 8px 16px; font-weight: 600;
             }
-            QPushButton:hover { background: #135e96; }
-            QPushButton:disabled { background: #c3c4c7; color: #50575e; }
+            QPushButton:hover { background: #175bc2; border-color: #175bc2; }
+            QPushButton:disabled { background: #d0d7de; border-color: #d0d7de; color: #57606a; }
             QLineEdit, QTextEdit, QComboBox, QTreeWidget, QTableWidget {
-                border: 1px solid #c3c4c7; border-radius: 4px;
-                padding: 6px; background: #fff;
+                border: 1px solid #d0d7de; border-radius: 5px;
+                padding: 6px; background: #ffffff; color: #1f2328;
+                selection-background-color: #dbeafe;
+                selection-color: #111827;
+            }
+            QTreeWidget::item, QTableWidget::item { padding: 4px; }
+            QTreeWidget::item:selected, QTableWidget::item:selected {
+                background: #dbeafe; color: #111827;
             }
             QGroupBox {
-                border: 1px solid #dcdcde; border-radius: 6px;
-                margin-top: 10px; padding-top: 14px; font-weight: 600;
+                border: 1px solid #d8dee4; border-radius: 6px;
+                margin-top: 10px; padding: 14px 10px 10px 10px;
+                background: #ffffff; font-weight: 600;
             }
             QGroupBox::title {
                 subcontrol-origin: margin; left: 10px; padding: 0 6px;
+                color: #24292f; background: #f6f7f9;
             }
             QHeaderView::section {
-                background: #f0f0f1; padding: 8px; border: none;
-                border-right: 1px solid #dcdcde;
+                background: #eef2f7; padding: 8px; border: none;
+                border-right: 1px solid #d8dee4; font-weight: 600;
             }
             QProgressBar {
-                border: 1px solid #c3c4c7; border-radius: 4px; background: #f0f0f1;
+                border: 1px solid #d0d7de; border-radius: 5px; background: #eaeef2;
+                text-align: center; color: #24292f;
             }
-            QProgressBar::chunk { background: #2271b1; border-radius: 3px; }
+            QProgressBar::chunk { background: #1f6feb; border-radius: 4px; }
         """)
 
     def closeEvent(self, event):
